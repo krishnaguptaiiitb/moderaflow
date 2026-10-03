@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+
 export default async function Home() {
   const [pendingCount, appealCount, activePolicy, recentContent] =
     await Promise.all([
@@ -73,9 +75,11 @@ export default async function Home() {
 
           <div className="rounded-xl border border-slate-800 bg-slate-900 p-6">
             <p className="text-sm text-slate-400">Active Policy</p>
+
             <p className="mt-2 text-3xl font-semibold">
               {activePolicy?.version ?? "—"}
             </p>
+
             <p className="mt-1 text-xs text-slate-500">
               {activePolicy?.policy.name ?? "No active policy"}
             </p>
@@ -85,6 +89,7 @@ export default async function Home() {
         <section className="mt-10 rounded-xl border border-slate-800 bg-slate-900">
           <div className="border-b border-slate-800 px-6 py-5">
             <h2 className="text-lg font-semibold">Recent Content</h2>
+
             <p className="mt-1 text-sm text-slate-400">
               Latest content entering the moderation workflow.
             </p>

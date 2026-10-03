@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+
 export default async function ModerationQueue() {
   const items = await prisma.content.findMany({
     where: {
@@ -58,6 +60,7 @@ export default async function ModerationQueue() {
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="font-semibold">Review Queue</h2>
+
                 <p className="mt-1 text-sm text-slate-500">
                   {items.length} item{items.length === 1 ? "" : "s"} waiting
                 </p>
@@ -125,6 +128,7 @@ export default async function ModerationQueue() {
             {items.length === 0 && (
               <div className="px-6 py-16 text-center">
                 <p className="font-medium">Queue is clear</p>
+
                 <p className="mt-2 text-sm text-slate-500">
                   No content currently requires moderation.
                 </p>

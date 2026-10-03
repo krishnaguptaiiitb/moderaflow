@@ -4,6 +4,8 @@ import {
   createPolicyVersion,
 } from "./actions";
 
+export const dynamic = "force-dynamic";
+
 export default async function PoliciesPage() {
   const policies = await prisma.policy.findMany({
     include: {
