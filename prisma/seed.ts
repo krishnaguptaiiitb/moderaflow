@@ -1,14 +1,27 @@
 import "dotenv/config";
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { PrismaLibSql } from "@prisma/adapter-libsql";
 import { PrismaClient } from "../generated/prisma/client";
 
-const adapter = new PrismaBetterSqlite3({
-  url: "file:./dev.db",
-});
+const useTurso =
+  process.env.SEED_TURSO === "1" &&
+  Boolean(process.env.TURSO_DATABASE_URL) &&
+  Boolean(process.env.TURSO_AUTH_TOKEN);
+
+const adapter = useTurso
+  ? new PrismaLibSql({
+      url: process.env.TURSO_DATABASE_URL!,
+      authToken: process.env.TURSO_AUTH_TOKEN!,
+    })
+  : new PrismaBetterSqlite3({
+      url: "file:./dev.db",
+    });
 
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
+  console.log(useTurso ? "Seeding Turso..." : "Seeding local SQLite...");
+
   await prisma.auditLog.deleteMany();
   await prisma.appeal.deleteMany();
   await prisma.agentRun.deleteMany();
@@ -79,6 +92,10 @@ async function main() {
     },
   });
 
+  const clauses = Object.fromEntries(
+    policyVersion.clauses.map((clause) => [clause.code, clause])
+  );
+
   const post1 = await prisma.content.create({
     data: {
       type: "POST",
@@ -124,22 +141,6 @@ async function main() {
     },
   });
 
-  const harassmentClause = policyVersion.clauses.find(
-    (clause) => clause.code === "HAR-01"
-  );
-
-  const threatClause = policyVersion.clauses.find(
-    (clause) => clause.code === "THR-01"
-  );
-
-  const spamClause = policyVersion.clauses.find(
-    (clause) => clause.code === "SPM-01"
-  );
-
-  if (!harassmentClause || !threatClause || !spamClause) {
-    throw new Error("Required policy clauses were not created");
-  }
-
   const approvedDecision = await prisma.moderationDecision.create({
     data: {
       contentId: post1.id,
@@ -171,7 +172,7 @@ async function main() {
       entityId: post1.id,
       action: "APPROVED",
       actorName: "Priya Sharma",
-      details: "Content approved after policy review.",
+      details: `Decision ${approvedDecision.id} approved content under policy 2.1.`,
     },
   });
 
@@ -198,7 +199,7 @@ async function main() {
       findings: {
         create: [
           {
-            policyClauseId: harassmentClause.id,
+            policyClauseId: clauses["HAR-01"].id,
             category: "Harassment",
             evidence: "You are completely useless. Nobody wants you here.",
             explanation:
@@ -229,16 +230,6 @@ async function main() {
     },
   });
 
-  await prisma.auditLog.create({
-    data: {
-      entityType: "CONTENT",
-      entityId: post2.id,
-      action: "FLAGGED_FOR_REVIEW",
-      actorName: "Moderation Agent",
-      details: "Potential harassment detected under HAR-01.",
-    },
-  });
-
   const spamDecision = await prisma.moderationDecision.create({
     data: {
       contentId: post4.id,
@@ -257,7 +248,7 @@ async function main() {
       findings: {
         create: [
           {
-            policyClauseId: spamClause.id,
+            policyClauseId: clauses["SPM-01"].id,
             category: "Spam",
             evidence: "Buy now. Buy now.",
             explanation:
@@ -306,7 +297,7 @@ async function main() {
       findings: {
         create: [
           {
-            policyClauseId: threatClause.id,
+            policyClauseId: clauses["THR-01"].id,
             category: "Threat",
             evidence: "I will find you and hurt you",
             explanation:
@@ -342,44 +333,49 @@ async function main() {
       contentId: post2.id,
       decisionId: harassmentDecision.id,
       reason:
-        "The author believes the comment was criticism of the discussion and not intended as personal harassment.",
+        "The author believes the content was criticism of the discussion and not intended as personal harassment.",
       evidence:
         "The author provided the surrounding conversation as additional context.",
       status: "PENDING",
     },
   });
 
-  await prisma.auditLog.create({
-    data: {
-      entityType: "APPEAL",
-      entityId: appeal.id,
-      action: "APPEAL_SUBMITTED",
-      actorName: "Rohan",
-      details: "Appeal submitted for second review.",
-    },
+  await prisma.auditLog.createMany({
+    data: [
+      {
+        entityType: "CONTENT",
+        entityId: post2.id,
+        action: "FLAGGED_FOR_REVIEW",
+        actorName: "Moderation Agent",
+        details: "Potential harassment detected under HAR-01.",
+      },
+      {
+        entityType: "CONTENT",
+        entityId: post4.id,
+        action: "FLAGGED_FOR_REVIEW",
+        actorName: "Moderation Agent",
+        details: "Potential spam detected under SPM-01.",
+      },
+      {
+        entityType: "CONTENT",
+        entityId: post5.id,
+        action: "FLAGGED_FOR_REVIEW",
+        actorName: "Moderation Agent",
+        details: "Potential threat detected under THR-01.",
+      },
+      {
+        entityType: "APPEAL",
+        entityId: appeal.id,
+        action: "APPEAL_SUBMITTED",
+        actorName: "Rohan",
+        details: "Appeal submitted for second review.",
+      },
+    ],
   });
 
-  await prisma.auditLog.create({
-    data: {
-      entityType: "CONTENT",
-      entityId: post4.id,
-      action: "FLAGGED_FOR_REVIEW",
-      actorName: "Moderation Agent",
-      details: "Potential spam detected under SPM-01.",
-    },
-  });
-
-  await prisma.auditLog.create({
-    data: {
-      entityType: "CONTENT",
-      entityId: post5.id,
-      action: "FLAGGED_FOR_REVIEW",
-      actorName: "Moderation Agent",
-      details: "Potential threat detected under THR-01.",
-    },
-  });
-
-  console.log("Seed data created successfully");
+  console.log(
+    `Seed complete. Policy ${policyVersion.version}, 5 content items, 3 reports, 4 decisions/audit events, and 1 appeal created.`
+  );
 }
 
 main()
