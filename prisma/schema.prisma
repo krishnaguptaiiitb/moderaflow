@@ -1,0 +1,190 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum ContentType {
+  POST
+  COMMENT
+}
+
+enum ContentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  MODIFIED
+  NEEDS_REVIEW
+}
+
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AppealStatus {
+  PENDING
+  UNDER_REVIEW
+  UPHELD
+  REVERSED
+  MODIFIED
+}
+
+enum ReviewAction {
+  APPROVE
+  REJECT
+  MODIFY
+}
+
+enum CheckStatus {
+  PASSED
+  FLAGGED
+}
+
+model Content {
+  id          String        @id @default(cuid())
+  type        ContentType
+  text        String
+  authorName  String?
+  status      ContentStatus @default(PENDING)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  reports     UserReport[]
+  decisions   ModerationDecision[]
+  appeals     Appeal[]
+}
+
+model UserReport {
+  id          String   @id @default(cuid())
+  contentId   String
+  reporterName String?
+  reason      String
+  createdAt   DateTime @default(now())
+
+  content     Content  @relation(fields: [contentId], references: [id])
+}
+
+model Policy {
+  id          String          @id @default(cuid())
+  name        String
+  description String
+  createdAt   DateTime        @default(now())
+
+  versions    PolicyVersion[]
+}
+
+model PolicyVersion {
+  id          String        @id @default(cuid())
+  policyId    String
+  version     String
+  isActive    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+
+  policy      Policy        @relation(fields: [policyId], references: [id])
+  clauses     PolicyClause[]
+  decisions   ModerationDecision[]
+}
+
+model PolicyClause {
+  id          String        @id @default(cuid())
+  policyVersionId String
+  code        String
+  title       String
+  description String
+  severity    Severity
+
+  policyVersion PolicyVersion @relation(fields: [policyVersionId], references: [id])
+  findings      Finding[]
+}
+
+model ModerationDecision {
+  id                  String        @id @default(cuid())
+  contentId           String
+  policyVersionId     String
+  status              ContentStatus @default(NEEDS_REVIEW)
+  recommendedAction   ReviewAction?
+  humanReviewRequired Boolean       @default(true)
+  moderatorName       String?
+  moderatorNotes      String?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  content             Content       @relation(fields: [contentId], references: [id])
+  policyVersion       PolicyVersion @relation(fields: [policyVersionId], references: [id])
+  findings            Finding[]
+  checks              DeterministicCheck[]
+  agentRuns           AgentRun[]
+  appeals             Appeal[]
+}
+
+model Finding {
+  id            String        @id @default(cuid())
+  decisionId    String
+  policyClauseId String?
+  category      String
+  evidence      String
+  explanation   String
+  severity      Severity
+  confidence    Float
+  isCertain     Boolean       @default(false)
+  createdAt     DateTime      @default(now())
+
+  decision      ModerationDecision @relation(fields: [decisionId], references: [id])
+  policyClause  PolicyClause?      @relation(fields: [policyClauseId], references: [id])
+}
+
+model DeterministicCheck {
+  id          String      @id @default(cuid())
+  decisionId  String
+  name        String
+  status      CheckStatus
+  details     String?
+  createdAt   DateTime    @default(now())
+
+  decision    ModerationDecision @relation(fields: [decisionId], references: [id])
+}
+
+model AgentRun {
+  id              String   @id @default(cuid())
+  decisionId      String
+  model           String
+  promptVersion   String
+  inputSummary    String?
+  outputSummary   String?
+  success         Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  decision        ModerationDecision @relation(fields: [decisionId], references: [id])
+}
+
+model Appeal {
+  id                String        @id @default(cuid())
+  contentId         String
+  decisionId        String
+  reason            String
+  evidence          String?
+  status            AppealStatus  @default(PENDING)
+  reviewerName      String?
+  finalNotes        String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  content           Content       @relation(fields: [contentId], references: [id])
+  decision          ModerationDecision @relation(fields: [decisionId], references: [id])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  entityType  String
+  entityId    String
+  action      String
+  actorName   String?
+  details     String?
+  createdAt   DateTime @default(now())
+}
